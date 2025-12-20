@@ -4,7 +4,7 @@ import { auth, provider } from "./firebase";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import './App.css'; 
 
-// ✅ YOUR LIVE RENDER BACKEND
+// ✅ LIVE RENDER BACKEND
 const BACKEND_URL = "https://meetscure-final.onrender.com"; 
 
 const socket = io(BACKEND_URL, {
@@ -73,7 +73,7 @@ function LoginScreen() {
   );
 }
 
-// 🎥 VIDEO APP (Debug & Robust)
+// 🎥 VIDEO APP (Clean Version)
 function VideoCall({ user }) {
   const myVideoRef = useRef(null);
   const strangerVideoRef = useRef(null);
@@ -84,13 +84,11 @@ function VideoCall({ user }) {
   const chatBottomRef = useRef(null);
 
   const [status, setStatus] = useState("Press Start");
-  const [debugStatus, setDebugStatus] = useState(""); // 🔥 DEBUG INFO ON SCREEN
   const [searching, setSearching] = useState(false);
   const [inputMsg, setInputMsg] = useState("");
   const [messages, setMessages] = useState([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [remoteStream, setRemoteStream] = useState(null);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   useEffect(() => {
     socket.connect(); 
@@ -98,7 +96,7 @@ function VideoCall({ user }) {
 
     socket.on("waiting", () => { 
         setStatus("Searching..."); setSearching(true); setMessages([]); 
-        setRemoteStream(null); setIsVideoPlaying(false); setDebugStatus("Waiting for partner...");
+        setRemoteStream(null);
     });
     
     socket.on("stranger-found", ({ id, initiator }) => {
@@ -107,12 +105,8 @@ function VideoCall({ user }) {
       initiatorRef.current = !!initiator;
       setSearching(false);
       setStatus("Connected! ⚡");
-      setDebugStatus("Partner Found. Connecting...");
       setMessages([]);
-      // 🔥 Delay slightly to ensure camera is ready
-      setTimeout(() => {
-        if (initiatorRef.current) initiateCall(id);
-      }, 500);
+      setTimeout(() => { if (initiatorRef.current) initiateCall(id); }, 500);
     });
 
     socket.on("signal", async (data) => {
@@ -133,32 +127,20 @@ function VideoCall({ user }) {
     return () => { socket.removeAllListeners(); cleanupPeer(); socket.disconnect(); };
   }, []);
 
-  // Force Play when Remote Stream Arrives
+  // 🔥 FORCE AUTO-PLAY WITHOUT BUTTON
   useEffect(() => { 
     if (strangerVideoRef.current && remoteStream) {
-        setDebugStatus("Stream Received! Playing...");
         strangerVideoRef.current.srcObject = remoteStream;
-        strangerVideoRef.current.play()
-            .then(() => { setIsVideoPlaying(true); setDebugStatus(""); })
-            .catch((e) => { 
-                console.error("Autoplay failed", e); 
-                setIsVideoPlaying(false); 
-                setDebugStatus("Autoplay blocked. Tap button."); 
+        // Keep trying to play until it works
+        const tryPlay = () => {
+            strangerVideoRef.current.play().catch(e => {
+                console.log("Autoplay blocked, retrying...", e);
+                setTimeout(tryPlay, 1000); // Retry every second
             });
-    } else if (partnerIdRef.current && !remoteStream) {
-        setDebugStatus("Connected. Waiting for Video...");
+        };
+        tryPlay();
     }
   }, [remoteStream]);
-
-  const handleUnlockVideo = () => {
-      if (strangerVideoRef.current && remoteStream) {
-          strangerVideoRef.current.play();
-          setIsVideoPlaying(true);
-          setDebugStatus("");
-      } else {
-          alert("No video stream received yet! Check internet connection.");
-      }
-  };
 
   async function startCamera() {
     try {
@@ -170,13 +152,9 @@ function VideoCall({ user }) {
   }
 
   function createPeerConnection(targetId) {
-    if (!streamRef.current) {
-        alert("Camera failed! Refresh page.");
-        return null;
-    }
+    if (!streamRef.current) return null;
     if (peerRef.current) peerRef.current.close();
     
-    // 🔥 ROBUST ICE SERVERS
     const pc = new RTCPeerConnection({ 
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -187,15 +165,8 @@ function VideoCall({ user }) {
       ] 
     });
     
-    // ✅ CRITICAL: Listen for tracks
-    pc.ontrack = (e) => { 
-        console.log("Track received!", e.streams[0]);
-        setRemoteStream(e.streams[0]); 
-    };
-    
+    pc.ontrack = (e) => { setRemoteStream(e.streams[0]); };
     pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit("signal", { to: targetId, signal: { candidate: ev.candidate } }); };
-    
-    // ✅ CRITICAL: Add local tracks immediately
     streamRef.current.getTracks().forEach((t) => pc.addTrack(t, streamRef.current));
     
     peerRef.current = pc;
@@ -227,7 +198,7 @@ function VideoCall({ user }) {
   
   async function handleCandidate(candidate) {
     if (!peerRef.current) return;
-    if (!peerRef.current.remoteDescription) return; // Ignore candidates before connection is ready
+    if (!peerRef.current.remoteDescription) return; 
     await peerRef.current.addIceCandidate(candidate);
   }
   
@@ -235,8 +206,6 @@ function VideoCall({ user }) {
     if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     partnerIdRef.current = null;
     setRemoteStream(null);
-    setIsVideoPlaying(false);
-    setDebugStatus("");
   }
 
   function startFinding() { if (!streamRef.current) return; setStatus("Searching..."); setSearching(true); socket.emit("find-stranger"); }
@@ -255,26 +224,9 @@ function VideoCall({ user }) {
       <div className="main-scroll">
         <div className="video-card">
             <div className="video-wrapper">
+                {/* Clean Video Element: No buttons, just video */}
                 <video ref={strangerVideoRef} autoPlay playsInline className="video-stream" />
                 <div className="label">Stranger</div>
-                
-                {/* 🔥 DEBUG STATUS OVERLAY */}
-                {partnerIdRef.current && !isVideoPlaying && (
-                    <div style={{position:'absolute', inset:0, background:'rgba(30, 41, 59, 0.9)', color:'white', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:50, gap:'10px'}}>
-                        <div style={{fontWeight:'bold'}}>{debugStatus || "Waiting for Stream..."}</div>
-                        
-                        {/* ONLY Show button if stream actually arrived */}
-                        {remoteStream && (
-                             <button onClick={handleUnlockVideo} style={{padding:'12px 24px', borderRadius:'30px', border:'none', background:'#22c55e', color:'white', fontWeight:'bold', fontSize:'1rem', cursor:'pointer', animation:'pulse 1.5s infinite'}}>
-                                🎥 Tap to See Video
-                             </button>
-                        )}
-                        
-                        {!remoteStream && (
-                            <div style={{fontSize:'0.8rem', opacity:0.7}}>Checking connection... (Try mobile data if stuck)</div>
-                        )}
-                    </div>
-                )}
             </div>
             <div className="video-wrapper">
                 <video ref={myVideoRef} autoPlay playsInline muted className="video-stream my-feed" />
@@ -292,7 +244,7 @@ function VideoCall({ user }) {
                 <button onClick={skip} className="action-btn btn-gray">Next</button>
             </div>
             <div className="btn-row">
-                <button className="icon-btn">🚩</button>
+                {/* 🚩 RED FLAG REMOVED */}
                 <button onClick={() => setIsChatOpen(true)} className="icon-btn" style={{background: isChatOpen ? '#0ea5e9' : '#f3f4f6', color: isChatOpen ? 'white' : '#333'}}>💬</button>
             </div>
         </div>
