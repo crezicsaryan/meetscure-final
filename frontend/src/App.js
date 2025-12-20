@@ -4,7 +4,7 @@ import { auth, provider } from "./firebase";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import './App.css'; 
 
-// ⚠️ PASTE YOUR PORT 5000 TUNNEL URL HERE ⚠️
+// ✅ YOUR LIVE RENDER BACKEND
 const BACKEND_URL = "https://meetscure-final.onrender.com"; 
 
 const socket = io(BACKEND_URL, {
@@ -45,7 +45,7 @@ function LoginScreen() {
 
   return (
     <div className="login-container">
-      {/* 1. Background Image (CSS Class) */}
+      {/* 1. Static Background Image (No video = No black screen) */}
       <div className="bg-image"></div>
       <div className="video-overlay"></div>
 
@@ -88,20 +88,11 @@ function LoginScreen() {
         &copy; 2025 Meetscure. All rights reserved.
       </footer>
 
-      {/* 🔥 DEVELOPER MODAL (With Image) */}
+      {/* 🔥 DEVELOPER MODAL */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
-            
-            {/* ✅ Updated path for public folder image */}
-            <img 
-              src="/IMG-20250603-WA0037.jpg" 
-              className="modal-photo" 
-              alt="Aryan Singh"
-              onError={(e) => {e.target.src = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'}} 
-            />
-            
             <div className="modal-role">LEAD DEVELOPER & FOUNDER</div>
             <div className="modal-name">Aryan Singh</div>
             <p className="modal-desc">
@@ -116,7 +107,7 @@ function LoginScreen() {
   );
 }
 
-// 🎥 VIDEO APP (Enhanced for Connection Stability)
+// 🎥 VIDEO APP (Robust Connection Handling)
 function VideoCall({ user }) {
   const myVideoRef = useRef(null);
   const strangerVideoRef = useRef(null);
@@ -166,16 +157,13 @@ function VideoCall({ user }) {
     return () => { socket.removeAllListeners(); cleanupPeer(); socket.disconnect(); };
   }, []);
 
-  // Force Video to Play when stream arrives
+  // FORCE PLAY VIDEO
   useEffect(() => { 
     if (strangerVideoRef.current && remoteStream) {
         strangerVideoRef.current.srcObject = remoteStream;
         strangerVideoRef.current.play()
             .then(() => setIsVideoPlaying(true))
-            .catch(e => {
-                console.error("Auto-play prevented", e);
-                setIsVideoPlaying(false);
-            });
+            .catch(() => setIsVideoPlaying(false)); 
     }
   }, [remoteStream]);
 
@@ -199,22 +187,19 @@ function VideoCall({ user }) {
     if (!streamRef.current) return null;
     if (peerRef.current) peerRef.current.close();
     
-    // ✅ FREE TURN SERVER (OpenRelay)
+    // 🔥 ROBUST ICE SERVERS (Google + OpenRelay)
     const pc = new RTCPeerConnection({ 
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
         { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
         { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
         { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
       ] 
     });
     
-    // ✅ CRITICAL: Ensure stream is set
-    pc.ontrack = (e) => { 
-        console.log("Stream received!");
-        setRemoteStream(e.streams[0]); 
-    };
-    
+    pc.ontrack = (e) => { setRemoteStream(e.streams[0]); };
     pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit("signal", { to: targetId, signal: { candidate: ev.candidate } }); };
     
     streamRef.current.getTracks().forEach((t) => pc.addTrack(t, streamRef.current));
@@ -261,7 +246,7 @@ function VideoCall({ user }) {
   return (
     <div className="app-layout">
       <div className="header">
-        <div className="brand-name">Stranger Video Call Meetscure</div>
+        <div className="brand-name">Meetscure</div>
         <button onClick={handleLogout} style={{background:'none', border:'none', fontSize:'1.2rem'}}>↪</button>
       </div>
 
@@ -271,17 +256,12 @@ function VideoCall({ user }) {
                 <video ref={strangerVideoRef} autoPlay playsInline className="video-stream" />
                 <div className="label">Stranger</div>
                 
-                {/* STATUS OVERLAY */}
-                {partnerIdRef.current && !remoteStream && (
-                    <div style={{position:'absolute', inset:0, background:'black', color:'white', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                        Waiting for stream...
-                    </div>
-                )}
-
-                {/* UNLOCK BUTTON */}
-                {partnerIdRef.current && remoteStream && !isVideoPlaying && (
-                    <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50}}>
-                        <button onClick={handleUnlockVideo} style={{padding:'15px 30px', borderRadius:'30px', border:'none', background:'#22c55e', color:'white', fontWeight:'bold', fontSize:'1rem'}}>Tap to View Video 🎥</button>
+                {/* 🔥 VIDEO UNLOCK BUTTON (Fixes Black Screen) */}
+                {partnerIdRef.current && !isVideoPlaying && (
+                    <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50}}>
+                        <button onClick={handleUnlockVideo} style={{padding:'15px 30px', borderRadius:'30px', border:'none', background:'#22c55e', color:'white', fontWeight:'bold', fontSize:'1rem', cursor:'pointer'}}>
+                           Tap to View Video 🎥
+                        </button>
                     </div>
                 )}
             </div>
@@ -314,7 +294,6 @@ function VideoCall({ user }) {
             <button className="close-btn" onClick={() => setIsChatOpen(false)} onTouchEnd={() => setIsChatOpen(false)}>✕</button>
         </div>
         <div className="chat-messages">
-            {messages.length === 0 && <div style={{textAlign:'center', color:'#999', marginTop:'20px'}}>Say Hello! 👋</div>}
             {messages.map((m, i) => (
                 <div key={i} className={`msg ${m.sender === "me" ? "me" : "them"}`}>{m.text}</div>
             ))}
